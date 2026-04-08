@@ -125,6 +125,13 @@ def get_current_corrupted_zone() -> dict:
             "next_zone":     str   — name of the next zone,
             "next_act":      int   — act of the next zone,
             "next_tags":     list  — tags for the next zone,
+            "zone_returns_offset": int — how many slots until this zone appears again,
+            "zone_returns_minutes": float — minutes until this zone returns,
+            "zones":         list  — full zone list (for lookahead searches),
+            "zone_act":      list  — full act list,
+            "exp_zones":     set   — indices tagged EXP,
+            "mf_zones":      set   — indices tagged MF,
+            "now_ms":        int   — current timestamp in ms,
         }
     """
     data = fetch_zone_data()
@@ -150,6 +157,20 @@ def get_current_corrupted_zone() -> dict:
             tags.append("MF")
         return tags
 
+    # Scan ahead to find when this zone returns (up to 24 hours = 96 slots)
+    zone_returns_offset = None
+    for i in range(2, 97):
+        future = get_zone(zones, zone_act, now_ms, offset=i)
+        if future["idx"] == current["idx"]:
+            zone_returns_offset = i
+            break
+
+    zone_returns_minutes = None
+    if zone_returns_offset is not None:
+        # Minutes from now until the start of that future slot
+        future_slot_ms = current["ts"] + CYCLE_MS * zone_returns_offset
+        zone_returns_minutes = round((future_slot_ms - now_ms) / 60_000, 1)
+
     return {
         "zone": current["zone"],
         "act": current["act"],
@@ -158,6 +179,15 @@ def get_current_corrupted_zone() -> dict:
         "next_zone": nxt["zone"],
         "next_act": nxt["act"],
         "next_tags": _tags(nxt["idx"]),
+        "zone_returns_offset": zone_returns_offset,
+        "zone_returns_minutes": zone_returns_minutes,
+        # Pass through for lookahead searches in the alert script
+        "zones": zones,
+        "zone_act": zone_act,
+        "exp_zones": exp_zones,
+        "mf_zones": mf_zones,
+        "now_ms": now_ms,
+        "current_ts": current["ts"],
     }
 
 
