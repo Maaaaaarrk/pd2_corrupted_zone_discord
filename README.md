@@ -10,12 +10,12 @@
 
 ## How It Works
 
-A GitHub Actions workflow runs every 5 minutes and:
+A GitHub Actions workflow runs every 15 minutes and:
 
 1. Fetches the latest zone rotation data from [cz-data.js](https://maaaaaarrk.github.io/Hiim-PD2-Resources/cz-data.js) (always in sync with the website)
 2. Calculates the current Corrupted Zone using the same PRNG logic as the website
-3. Checks if it matches your favorite zones or tags
-4. Sends a rich Discord embed if it matches
+3. Checks if it matches your favorite zones or tags (if `FILTER_ALERTS` is enabled)
+4. Sends a rich Discord embed with zone info, time remaining, when the zone returns, and your next favorite zone
 
 ---
 
@@ -50,7 +50,7 @@ A GitHub Actions workflow runs every 5 minutes and:
 
 ### Step 4: Done!
 
-The workflow will start running automatically every 5 minutes. You can also trigger it manually:
+The workflow will start running automatically every 15 minutes (at :00, :15, :30, :45). You can also trigger it manually:
 
 1. Go to the **Actions** tab in your repo
 2. Click **"PD2 Corrupted Zone Alert"** in the left sidebar
@@ -69,7 +69,8 @@ Set `FAVORITE_ZONES` to a comma-separated list of zone names (partial matches wo
 ```json
 {
   "FAVORITE_ZONES": "Chaos Sanctuary, Durance of Hate, Travincal",
-  "TAG_ZONES": ""
+  "TAG_ZONES": "",
+  "FILTER_ALERTS": true
 }
 ```
 
@@ -80,7 +81,8 @@ Set `TAG_ZONES` to filter by the website's EXP and MF tags:
 ```json
 {
   "FAVORITE_ZONES": "",
-  "TAG_ZONES": "MF, EXP"
+  "TAG_ZONES": "MF, EXP",
+  "FILTER_ALERTS": true
 }
 ```
 
@@ -91,22 +93,32 @@ If both are set, you get alerts when **either** condition matches:
 ```json
 {
   "FAVORITE_ZONES": "Chaos Sanctuary, Cow Level",
-  "TAG_ZONES": "EXP"
+  "TAG_ZONES": "EXP",
+  "FILTER_ALERTS": true
 }
 ```
 
 This alerts on Chaos Sanctuary, Cow Level, **or** any zone tagged EXP.
 
-### Alert on Every Zone
+### Alert on Every Zone (Default)
 
-Leave both fields empty (the default):
+Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every zone rotation, but the embed will still show your **Next Favorite Zone** based on your favorites/tags:
 
 ```json
 {
-  "FAVORITE_ZONES": "",
-  "TAG_ZONES": ""
+  "FAVORITE_ZONES": "Chaos Sanctuary",
+  "TAG_ZONES": "EXP",
+  "FILTER_ALERTS": false
 }
 ```
+
+### Config Options Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `FAVORITE_ZONES` | string | `""` | Comma-separated zone names (partial match, e.g. `"Chaos"` matches `"Chaos Sanctuary"`) |
+| `TAG_ZONES` | string | `""` | Comma-separated tags: `"MF"`, `"EXP"`, or `"MF, EXP"` |
+| `FILTER_ALERTS` | boolean | `false` | `true` = only alert on matching zones. `false` = alert on every zone |
 
 ---
 
@@ -134,11 +146,14 @@ You'll get a Discord embed like this:
 >
 > **Chaos Sanctuary** — Act 4  |  `MF`
 >
-> | Time Left | Next Zone |
-> |-----------|-----------|
-> | 11.3 minutes | Arreat Plateau, Crystalline Passage, and Frozen River (Act 5) |
+> **Ends:** *in 12 minutes*
+> **Next Zone:** Arreat Plateau, Crystalline Passage, and Frozen River (Act 5)
+> **Zone Returns:** April 8, 2026 4:15 PM (*in 8 hours*)
+> **Next Favorite Zone:** Durance of Hate (Act 3) — April 8, 2026 6:30 PM (*in 10 hours*)
 >
 > *PD2 Corrupted Zones - https://maaaaaarrk.github.io/Hiim-PD2-Resources/cz.html*
+
+All timestamps use Discord's native formatting, so they automatically display in each user's local timezone and count down in real time.
 
 ---
 
@@ -165,8 +180,7 @@ The zone calculation mirrors the website exactly. If they don't match:
 
 ### Too many notifications
 
-- Set `FAVORITE_ZONES` or `TAG_ZONES` in `config.json` to filter alerts.
-- The workflow runs every 5 minutes but zones last 15 minutes, so you may get up to 3 alerts per zone. To reduce this, you can change the cron schedule in `.github/workflows/pd2-cz-alert.yml` to `'*/15 * * * *'`.
+- Set `FILTER_ALERTS` to `true` in `config.json` and configure `FAVORITE_ZONES` or `TAG_ZONES` to only get alerts for zones you care about.
 
 ---
 
@@ -175,7 +189,7 @@ The zone calculation mirrors the website exactly. If they don't match:
 ```
 .
 ├── .github/workflows/
-│   └── pd2-cz-alert.yml      # GitHub Actions workflow (runs every 5 min)
+│   └── pd2-cz-alert.yml      # GitHub Actions workflow (runs every 15 min)
 ├── scripts/
 │   ├── zone_calculator.py     # Core zone rotation logic (fetches cz-data.js)
 │   └── send_discord_alert.py  # Discord webhook sender
