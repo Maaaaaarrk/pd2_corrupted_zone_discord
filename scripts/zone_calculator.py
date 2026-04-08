@@ -165,22 +165,25 @@ def get_current_corrupted_zone() -> dict:
             zone_returns_offset = i
             break
 
-    zone_returns_minutes = None
+    zone_returns_ts = None
     if zone_returns_offset is not None:
-        # Minutes from now until the start of that future slot
-        future_slot_ms = current["ts"] + CYCLE_MS * zone_returns_offset
-        zone_returns_minutes = round((future_slot_ms - now_ms) / 60_000, 1)
+        # Unix timestamp (seconds) of when this zone returns
+        zone_returns_ts = (current["ts"] + CYCLE_MS * zone_returns_offset) // 1000
+
+    # Unix timestamp (seconds) of when the current zone ends
+    slot_end_ts = slot_end_ms // 1000
 
     return {
         "zone": current["zone"],
         "act": current["act"],
         "tags": _tags(current["idx"]),
         "minutes_left": minutes_left,
+        "slot_end_ts": slot_end_ts,
         "next_zone": nxt["zone"],
         "next_act": nxt["act"],
         "next_tags": _tags(nxt["idx"]),
         "zone_returns_offset": zone_returns_offset,
-        "zone_returns_minutes": zone_returns_minutes,
+        "zone_returns_ts": zone_returns_ts,
         # Pass through for lookahead searches in the alert script
         "zones": zones,
         "zone_act": zone_act,

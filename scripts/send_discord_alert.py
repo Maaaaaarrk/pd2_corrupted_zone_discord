@@ -67,20 +67,10 @@ def should_alert(zone_info: dict, config: dict) -> bool:
     return False
 
 
-def _format_duration(minutes: float) -> str:
-    """Format minutes into a readable string like '2h 15m' or '45m'."""
-    total_min = int(minutes)
-    if total_min >= 60:
-        h = total_min // 60
-        m = total_min % 60
-        return f"{h}h {m}m" if m else f"{h}h"
-    return f"{total_min}m"
-
-
 def find_next_alert(zone_info: dict, config: dict) -> dict | None:
     """Scan future slots to find the next zone that would trigger an alert.
 
-    Returns {"zone", "act", "tags", "minutes_from_now"} or None.
+    Returns {"zone", "act", "tags", "timestamp"} or None.
     Only meaningful when filters are active.
     """
     zones = zone_info["zones"]
@@ -107,13 +97,13 @@ def find_next_alert(zone_info: dict, config: dict) -> dict | None:
             "tags": _tags(future["idx"]),
         }
         if should_alert(future_info, config):
-            future_slot_ms = current_ts + CYCLE_MS * i
-            minutes_from_now = round((future_slot_ms - now_ms) / 60_000, 1)
+            # Unix timestamp (seconds) of when this slot starts
+            future_ts = (current_ts + CYCLE_MS * i) // 1000
             return {
                 "zone": future["zone"],
                 "act": future["act"],
                 "tags": _tags(future["idx"]),
-                "minutes_from_now": minutes_from_now,
+                "timestamp": future_ts,
             }
     return None
 
@@ -133,7 +123,7 @@ def build_embed(zone_info: dict, config: dict) -> dict:
     fields = [
         {
             "name": "\u23f1\ufe0f Time Left",
-            "value": f"{zone_info['minutes_left']} minutes",
+            "value": f"<t:{zone_info['slot_end_ts']}:R>",
             "inline": True,
         },
         {
@@ -144,10 +134,10 @@ def build_embed(zone_info: dict, config: dict) -> dict:
     ]
 
     # Zone Returns — when this same zone comes back
-    if zone_info.get("zone_returns_minutes") is not None:
+    if zone_info.get("zone_returns_ts") is not None:
         fields.append({
             "name": "\U0001f504 Zone Returns",
-            "value": f"in {_format_duration(zone_info['zone_returns_minutes'])}",
+            "value": f"<t:{zone_info['zone_returns_ts']}:f>",
             "inline": True,
         })
 
@@ -163,7 +153,7 @@ def build_embed(zone_info: dict, config: dict) -> dict:
             na_tag_str = f"  {na_tags}" if na_tags else ""
             fields.append({
                 "name": "\U0001f514 Next Alert",
-                "value": f"{next_alert['zone']} (Act {next_alert['act']}){na_tag_str}\nin {_format_duration(next_alert['minutes_from_now'])}",
+                "value": f"{next_alert['zone']} (Act {next_alert['act']}){na_tag_str}\n<t:{next_alert['timestamp']}:f>",
                 "inline": False,
             })
 
