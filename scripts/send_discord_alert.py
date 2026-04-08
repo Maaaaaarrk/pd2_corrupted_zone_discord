@@ -122,7 +122,7 @@ def build_embed(zone_info: dict, config: dict) -> dict:
 
     fields = [
         {
-            "name": "\u23f1\ufe0f Time Left",
+            "name": "\u23f1\ufe0f Ends",
             "value": f"<t:{zone_info['slot_end_ts']}:R>",
             "inline": True,
         },
@@ -137,7 +137,7 @@ def build_embed(zone_info: dict, config: dict) -> dict:
     if zone_info.get("zone_returns_ts") is not None:
         fields.append({
             "name": "\U0001f504 Zone Returns",
-            "value": f"<t:{zone_info['zone_returns_ts']}:f>",
+            "value": f"<t:{zone_info['zone_returns_ts']}:f>\n<t:{zone_info['zone_returns_ts']}:R>",
             "inline": True,
         })
 
@@ -153,7 +153,7 @@ def build_embed(zone_info: dict, config: dict) -> dict:
             na_tag_str = f"  {na_tags}" if na_tags else ""
             fields.append({
                 "name": "\U0001f514 Next Alert",
-                "value": f"{next_alert['zone']} (Act {next_alert['act']}){na_tag_str}\n<t:{next_alert['timestamp']}:f>",
+                "value": f"{next_alert['zone']} (Act {next_alert['act']}){na_tag_str}\n<t:{next_alert['timestamp']}:f> (<t:{next_alert['timestamp']}:R>)",
                 "inline": False,
             })
 
@@ -206,7 +206,8 @@ def main():
 
     # Check if we should alert
     config = load_config()
-    if not should_alert(zone_info, config):
+    filter_alerts = config.get("FILTER_ALERTS", False)
+    if filter_alerts and not should_alert(zone_info, config):
         print("Zone does not match favorites/tags — skipping alert.")
         return
 

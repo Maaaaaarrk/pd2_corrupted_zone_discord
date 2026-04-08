@@ -1,4 +1,5 @@
 {
   "FAVORITE_ZONES": "Abaddon",
-  "TAG_ZONES": "MF,EXP"
+  "TAG_ZONES": "MF,EXP",
+  "FILTER_ALERTS": false
 }
