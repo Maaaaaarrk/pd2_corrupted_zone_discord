@@ -152,7 +152,7 @@ def build_embed(zone_info: dict, config: dict) -> dict:
             na_tags = " ".join(f"`{t}`" for t in next_alert["tags"])
             na_tag_str = f"  {na_tags}" if na_tags else ""
             fields.append({
-                "name": "\U0001f514 Next Alert",
+                "name": "\U0001f514 Next Favorite Zone",
                 "value": f"{next_alert['zone']} (Act {next_alert['act']}){na_tag_str}\n<t:{next_alert['timestamp']}:f> (<t:{next_alert['timestamp']}:R>)",
                 "inline": False,
             })
