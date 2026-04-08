@@ -3,7 +3,7 @@ name: PD2 Corrupted Zone Alert
 on:
   schedule:
     # Runs every 5 minutes
-    - cron: '*/5 * * * *'
+    - cron: '0,15,30,45 * * * *'
   workflow_dispatch: # Allow manual trigger for testing
 
 jobs:
