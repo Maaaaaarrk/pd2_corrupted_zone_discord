@@ -21,7 +21,7 @@ GitHub Template Repository that sends Discord notifications when specific Corrup
 
 ## Configuration
 - `DISCORD_WEBHOOK_URL` — Required GitHub Actions secret
-- `config.json` — Optional zone/tag filters (empty = alert on all zones)
+- `config.json` — Optional zone/tag filters (empty = alert on all zones), plus PRE_WARNING_MINUTES for advance alerts
 
 ## Commands
 - Test zone calculator: `python scripts/zone_calculator.py`

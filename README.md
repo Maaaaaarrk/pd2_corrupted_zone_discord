@@ -112,6 +112,21 @@ Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every 
 }
 ```
 
+### Get Warned Before Your Zone Goes Active
+
+Set `PRE_WARNING_MINUTES` to receive an additional heads-up alert before a matching zone starts. The pre-warning uses a distinct gold-colored embed so you can tell it apart from the active zone alert:
+
+```json
+{
+  "FAVORITE_ZONES": "Chaos Sanctuary, Durance of Hate",
+  "TAG_ZONES": "",
+  "FILTER_ALERTS": true,
+  "PRE_WARNING_MINUTES": 15
+}
+```
+
+This sends a "Corrupted Zone Coming Up!" alert when your favorite zone is one rotation (15 minutes) away, giving you time to prepare. Set it to `30` for two rotations of lead time, etc.
+
 ### Config Options Reference
 
 | Option | Type | Default | Description |
@@ -119,6 +134,7 @@ Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every 
 | `FAVORITE_ZONES` | string | `""` | Comma-separated zone names (partial match, e.g. `"Chaos"` matches `"Chaos Sanctuary"`) |
 | `TAG_ZONES` | string | `""` | Comma-separated tags: `"MF"`, `"EXP"`, or `"MF, EXP"` |
 | `FILTER_ALERTS` | boolean | `false` | `true` = only alert on matching zones. `false` = alert on every zone |
+| `PRE_WARNING_MINUTES` | number | `0` | Minutes before a matching zone goes active to send a heads-up alert. `0` = disabled. Set to `15` to get warned one rotation early |
 
 ---
 

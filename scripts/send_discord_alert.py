@@ -4,6 +4,9 @@ PD2 Corrupted Zone → Discord Alert
 Checks the current Corrupted Zone, compares it against the user's
 FAVORITE_ZONES and TAG_ZONES config, and sends a rich Discord embed
 if it matches (or if no filters are configured, alerts on every zone).
+
+Optionally sends a pre-warning alert before a matching zone goes active
+(configured via PRE_WARNING_MINUTES in config.json).
 """
 
 import json
@@ -24,6 +27,7 @@ WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 CZ_PAGE_URL = "https://maaaaaarrk.github.io/Hiim-PD2-Resources/cz.html"
 EMBED_COLOR = 0x9B59B6  # Purple
+PRE_WARNING_COLOR = 0xF1C40F  # Gold/yellow for pre-warnings
 
 
 def load_config() -> dict:
@@ -108,6 +112,65 @@ def find_next_alert(zone_info: dict, config: dict) -> dict | None:
     return None
 
 
+
+def find_pre_warning_zones(zone_info: dict, config: dict) -> list[dict]:
+    """Find upcoming zones within the PRE_WARNING_MINUTES window that match filters.
+
+    Returns a list of dicts with zone info and timestamps for zones that:
+      1. Start within PRE_WARNING_MINUTES from now
+      2. Match the user's FAVORITE_ZONES / TAG_ZONES filters
+      3. Are NOT the current zone (offset >= 1)
+    """
+    pre_warning_minutes = config.get("PRE_WARNING_MINUTES", 0)
+    if not pre_warning_minutes or pre_warning_minutes <= 0:
+        return []
+
+    zones = zone_info["zones"]
+    zone_act = zone_info["zone_act"]
+    exp_zones = zone_info["exp_zones"]
+    mf_zones = zone_info["mf_zones"]
+    now_ms = zone_info["now_ms"]
+    current_ts = zone_info["current_ts"]
+
+    def _tags(idx):
+        tags = []
+        if idx in exp_zones:
+            tags.append("EXP")
+        if idx in mf_zones:
+            tags.append("MF")
+        return tags
+
+    warning_window_ms = pre_warning_minutes * 60 * 1000
+    results = []
+
+    # Check future slots that start within the warning window
+    max_slots = (pre_warning_minutes // 15) + 1
+    for i in range(1, max_slots + 1):
+        future = get_zone(zones, zone_act, now_ms, offset=i)
+        future_start_ms = current_ts + CYCLE_MS * i
+        time_until_ms = future_start_ms - now_ms
+
+        if time_until_ms > warning_window_ms:
+            break
+
+        future_info = {
+            "zone": future["zone"],
+            "act": future["act"],
+            "tags": _tags(future["idx"]),
+        }
+
+        if should_alert(future_info, config):
+            results.append({
+                "zone": future["zone"],
+                "act": future["act"],
+                "tags": _tags(future["idx"]),
+                "timestamp": future_start_ms // 1000,
+                "minutes_until": round(time_until_ms / 60_000, 1),
+            })
+
+    return results
+
+
 def build_embed(zone_info: dict, config: dict) -> dict:
     """Build a Discord rich embed for the current Corrupted Zone."""
     tag_str = ""
@@ -171,6 +234,42 @@ def build_embed(zone_info: dict, config: dict) -> dict:
     return embed
 
 
+
+def build_pre_warning_embed(upcoming_zone: dict) -> dict:
+    """Build a Discord rich embed for an upcoming zone pre-warning."""
+    tag_str = ""
+    if upcoming_zone["tags"]:
+        tag_str = "  |  " + " ".join(f"`{t}`" for t in upcoming_zone["tags"])
+
+    description = f"**{upcoming_zone['zone']}** — Act {upcoming_zone['act']}{tag_str}"
+
+    fields = [
+        {
+            "name": "🕒 Starts",
+            "value": f"<t:{upcoming_zone['timestamp']}:R>",
+            "inline": True,
+        },
+        {
+            "name": "📅 Start Time",
+            "value": f"<t:{upcoming_zone['timestamp']}:f>",
+            "inline": True,
+        },
+    ]
+
+    embed = {
+        "title": "🔔 Corrupted Zone Coming Up!",
+        "description": description,
+        "color": PRE_WARNING_COLOR,
+        "fields": fields,
+        "footer": {
+            "text": f"PD2 Corrupted Zones • {CZ_PAGE_URL}",
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    return embed
+
+
 def send_alert(webhook_url: str, embed: dict) -> None:
     """POST the embed to the Discord webhook."""
     payload = {
@@ -204,8 +303,22 @@ def main():
     print(f"  Time left: {zone_info['minutes_left']} min")
     print(f"  Next: {zone_info['next_zone']} (Act {zone_info['next_act']})")
 
-    # Check if we should alert
     config = load_config()
+
+    # --- Pre-warning alerts ---
+    pre_warning_minutes = config.get("PRE_WARNING_MINUTES", 0)
+    if pre_warning_minutes and pre_warning_minutes > 0:
+        upcoming = find_pre_warning_zones(zone_info, config)
+        for uz in upcoming:
+            print(f"Pre-warning: {uz['zone']} (Act {uz['act']}) starts in {uz['minutes_until']} min")
+            embed = build_pre_warning_embed(uz)
+            try:
+                send_alert(WEBHOOK_URL, embed)
+            except requests.RequestException as e:
+                print(f"ERROR: Failed to send pre-warning alert: {e}")
+                sys.exit(1)
+
+    # --- Current zone alert ---
     filter_alerts = config.get("FILTER_ALERTS", False)
     if filter_alerts and not should_alert(zone_info, config):
         print("Zone does not match favorites/tags — skipping alert.")
