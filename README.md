@@ -100,6 +100,27 @@ If both are set, you get alerts when **either** condition matches:
 
 This alerts on Chaos Sanctuary, Cow Level, **or** any zone tagged EXP.
 
+### Pre-Warning for Upcoming Zones
+
+Want a heads-up *before* your favorite zone goes live? Set `PRE_WARNING_MINUTES` to get an early alert when a matching zone is about to start:
+
+```json
+{
+  "FAVORITE_ZONES": "Chaos Sanctuary, Cow Level",
+  "TAG_ZONES": "EXP",
+  "FILTER_ALERTS": true,
+  "PRE_WARNING_MINUTES": 15
+}
+```
+
+This sends an orange "Corrupted Zone Incoming!" alert whenever a zone matching your favorites or tags is starting within the next 15 minutes. The pre-warning shows the zone name, act, tags, and a countdown to when it starts.
+
+**How it works:**
+- Pre-warnings are only sent when `FILTER_ALERTS` is `true` (otherwise you already get notified for every zone).
+- The value is the lookahead window in minutes. Set it to `15` to get warned one zone rotation ahead, `30` for two rotations, etc.
+- Set to `0` (the default) to disable pre-warnings.
+- Pre-warnings are sent *in addition to* the normal "Corrupted Zone Active!" alert when the zone actually starts.
+
 ### Alert on Every Zone (Default)
 
 Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every zone rotation, but the embed will still show your **Next Favorite Zone** based on your favorites/tags:
@@ -108,7 +129,8 @@ Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every 
 {
   "FAVORITE_ZONES": "Chaos Sanctuary",
   "TAG_ZONES": "EXP",
-  "FILTER_ALERTS": false
+  "FILTER_ALERTS": false,
+  "PRE_WARNING_MINUTES": 0
 }
 ```
 
@@ -119,6 +141,7 @@ Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every 
 | `FAVORITE_ZONES` | string | `""` | Comma-separated zone names (partial match, e.g. `"Chaos"` matches `"Chaos Sanctuary"`) |
 | `TAG_ZONES` | string | `""` | Comma-separated tags: `"MF"`, `"EXP"`, or `"MF, EXP"` |
 | `FILTER_ALERTS` | boolean | `false` | `true` = only alert on matching zones. `false` = alert on every zone |
+| `PRE_WARNING_MINUTES` | number | `0` | Lookahead window in minutes. When `> 0` and `FILTER_ALERTS` is `true`, sends an early "incoming" alert for matching zones about to start. Set to `15` for one rotation ahead, `30` for two, etc. `0` = disabled |
 
 ---
 

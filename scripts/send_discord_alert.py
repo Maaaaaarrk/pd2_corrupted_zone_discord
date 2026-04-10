@@ -24,6 +24,7 @@ WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 CZ_PAGE_URL = "https://maaaaaarrk.github.io/Hiim-PD2-Resources/cz.html"
 EMBED_COLOR = 0x9B59B6  # Purple
+PRE_WARNING_COLOR = 0xF39C12  # Orange/amber for pre-warnings
 
 
 def load_config() -> dict:
@@ -106,6 +107,94 @@ def find_next_alert(zone_info: dict, config: dict) -> dict | None:
                 "timestamp": future_ts,
             }
     return None
+
+
+def find_pre_warning_zones(zone_info: dict, config: dict) -> list:
+    """Find upcoming zones within the pre-warning window that match filters.
+
+    Returns a list of dicts with zone info and timestamps for zones that:
+      - Match the user's FAVORITE_ZONES or TAG_ZONES filters
+      - Start within the next PRE_WARNING_MINUTES
+      - Are NOT the current zone (offset > 0)
+    """
+    pre_warn_min = config.get("PRE_WARNING_MINUTES", 0)
+    if not pre_warn_min or pre_warn_min <= 0:
+        return []
+
+    zones = zone_info["zones"]
+    zone_act = zone_info["zone_act"]
+    exp_zones = zone_info["exp_zones"]
+    mf_zones = zone_info["mf_zones"]
+    now_ms = zone_info["now_ms"]
+    current_ts = zone_info["current_ts"]
+
+    def _tags(idx):
+        tags = []
+        if idx in exp_zones:
+            tags.append("EXP")
+        if idx in mf_zones:
+            tags.append("MF")
+        return tags
+
+    # How many slots ahead to check (each slot is 15 min)
+    slots_ahead = max(1, int(pre_warn_min / 15) + 1)
+    results = []
+
+    for i in range(1, slots_ahead + 1):
+        future = get_zone(zones, zone_act, now_ms, offset=i)
+        future_start_ms = current_ts + CYCLE_MS * i
+        minutes_until = (future_start_ms - now_ms) / 60_000
+
+        # Only include zones within the pre-warning window
+        if minutes_until > pre_warn_min:
+            break
+
+        future_info = {
+            "zone": future["zone"],
+            "act": future["act"],
+            "tags": _tags(future["idx"]),
+        }
+
+        if should_alert(future_info, config):
+            results.append({
+                "zone": future["zone"],
+                "act": future["act"],
+                "tags": _tags(future["idx"]),
+                "timestamp": future_start_ms // 1000,
+                "minutes_until": round(minutes_until, 1),
+            })
+
+    return results
+
+
+def build_pre_warning_embed(upcoming_zone: dict) -> dict:
+    """Build a Discord embed for a pre-warning about an upcoming zone."""
+    tag_str = ""
+    if upcoming_zone["tags"]:
+        tag_str = "  |  " + " ".join(f"`{t}`" for t in upcoming_zone["tags"])
+
+    description = f"**{upcoming_zone['zone']}** — Act {upcoming_zone['act']}{tag_str}"
+
+    fields = [
+        {
+            "name": "\u23f0 Starts",
+            "value": f"<t:{upcoming_zone['timestamp']}:R>",
+            "inline": True,
+        },
+    ]
+
+    embed = {
+        "title": "\U0001f514 Corrupted Zone Incoming!",
+        "description": description,
+        "color": PRE_WARNING_COLOR,
+        "fields": fields,
+        "footer": {
+            "text": f"PD2 Corrupted Zones \u2022 {CZ_PAGE_URL}",
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    return embed
 
 
 def build_embed(zone_info: dict, config: dict) -> dict:
@@ -207,6 +296,20 @@ def main():
     # Check if we should alert
     config = load_config()
     filter_alerts = config.get("FILTER_ALERTS", False)
+
+    # --- Pre-warnings: alert about upcoming favorite zones ---
+    pre_warn_min = config.get("PRE_WARNING_MINUTES", 0)
+    if pre_warn_min and pre_warn_min > 0 and filter_alerts:
+        upcoming = find_pre_warning_zones(zone_info, config)
+        for uz in upcoming:
+            print(f"Pre-warning: {uz['zone']} (Act {uz['act']}) starts in {uz['minutes_until']} min")
+            pre_embed = build_pre_warning_embed(uz)
+            try:
+                send_alert(WEBHOOK_URL, pre_embed)
+            except requests.RequestException as e:
+                print(f"WARNING: Failed to send pre-warning alert: {e}")
+
+    # --- Current zone alert ---
     if filter_alerts and not should_alert(zone_info, config):
         print("Zone does not match favorites/tags — skipping alert.")
         return
