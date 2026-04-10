@@ -2,5 +2,5 @@
   "FAVORITE_ZONES": "Abaddon",
   "TAG_ZONES": "",
   "FILTER_ALERTS": true,
-  "PRE_WARNING_MINUTES": 0
+  "PRE_WARNING_MINUTES": 5
 }
