@@ -10,19 +10,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debounce — skip if already ran this 15-min window
+      - name: Debounce — skip if already ran this 4-min window
         id: debounce
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Determine the start of the current 15-min window
-          # Windows: :00-:14, :15-:29, :30-:44, :45-:59
+          # Determine the start of the current 4-min window
+          # Windows: :00-:03, :04-:07, :08-:11, ... :56-:59
           MIN=$(date -u +%-M)
-          WINDOW_START=$(( (MIN / 15) * 15 ))
+          WINDOW_START=$(( (MIN / 4) * 4 ))
           WINDOW_TS="$(date -u +%Y-%m-%dT%H):$(printf '%02d' $WINDOW_START):00Z"
           WINDOW_EPOCH=$(date -u -d "$WINDOW_TS" +%s)
 
-          echo "Current 15-min window starts at: $WINDOW_TS (epoch: $WINDOW_EPOCH)"
+          echo "Current 4-min window starts at: $WINDOW_TS (epoch: $WINDOW_EPOCH)"
 
           # Get recent successful runs and check if any started in this window
           COUNT=$(gh run list \
