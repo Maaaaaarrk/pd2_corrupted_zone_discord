@@ -37,6 +37,7 @@ CYCLE_MS = 900_000  # 15 minutes in milliseconds
 LCG_MULTIPLIER = 214013
 LCG_INCREMENT = 2531011
 CZ_DATA_URL = "https://maaaaaarrk.github.io/Hiim-PD2-Resources/cz-data.js"
+LATENCY_TOLERANCE_MS = 120_000  # 2 minutes — snap to next slot if within this window
 
 # ---------------------------------------------------------------------------
 # Fetch zone data from the live cz-data.js
@@ -143,6 +144,14 @@ def get_current_corrupted_zone() -> dict:
     red_zones = set(data.get("redZones", []))
 
     now_ms = int(time.time() * 1000)
+
+    # Snap forward to the next slot boundary if within the latency tolerance.
+    # This prevents cron jobs that fire slightly early from computing the
+    # wrong (old) zone.  See GitHub issue #12.
+    slot_start = (now_ms // CYCLE_MS) * CYCLE_MS
+    next_slot_start = slot_start + CYCLE_MS
+    if (next_slot_start - now_ms) <= LATENCY_TOLERANCE_MS:
+        now_ms = next_slot_start
 
     current = get_zone(zones, zone_act, now_ms, offset=0)
     nxt = get_zone(zones, zone_act, now_ms, offset=1)
