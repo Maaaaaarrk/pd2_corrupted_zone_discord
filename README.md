@@ -74,14 +74,14 @@ Set `FAVORITE_ZONES` to a comma-separated list of zone names (partial matches wo
 }
 ```
 
-### Alert on Tagged Zones (EXP / MF / RED)
+### Alert on Tagged Zones (TOP / GOOD)
 
-Set `TAG_ZONES` to filter by the website's EXP, MF, and RED tags:
+Set `TAG_ZONES` to filter by the website's TOP and GOOD tags:
 
 ```json
 {
   "FAVORITE_ZONES": "",
-  "TAG_ZONES": "MF, EXP, RED",
+  "TAG_ZONES": "TOP, GOOD",
   "FILTER_ALERTS": true
 }
 ```
@@ -93,12 +93,12 @@ If both are set, you get alerts when **either** condition matches:
 ```json
 {
   "FAVORITE_ZONES": "Chaos Sanctuary, Cow Level",
-  "TAG_ZONES": "EXP",
+  "TAG_ZONES": "TOP",
   "FILTER_ALERTS": true
 }
 ```
 
-This alerts on Chaos Sanctuary, Cow Level, **or** any zone tagged EXP.
+This alerts on Chaos Sanctuary, Cow Level, **or** any zone tagged TOP.
 
 ### Pre-Warning for Upcoming Zones
 
@@ -111,7 +111,7 @@ Set the lookahead window to the number of minutes before a zone rotation you wan
 ```json
 {
   "FAVORITE_ZONES": "Chaos Sanctuary, Cow Level",
-  "TAG_ZONES": "EXP",
+  "TAG_ZONES": "TOP",
   "FILTER_ALERTS": true,
   "PRE_WARNING_MINUTES": 5
 }
@@ -157,7 +157,7 @@ Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every 
 ```json
 {
   "FAVORITE_ZONES": "Chaos Sanctuary",
-  "TAG_ZONES": "EXP",
+  "TAG_ZONES": "TOP",
   "FILTER_ALERTS": false,
   "PRE_WARNING_MINUTES": 0
 }
@@ -168,7 +168,7 @@ Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `FAVORITE_ZONES` | string | `""` | Comma-separated zone names (partial match, e.g. `"Chaos"` matches `"Chaos Sanctuary"`) |
-| `TAG_ZONES` | string | `""` | Comma-separated tags: `"MF"`, `"EXP"`, `"RED"`, or any combination like `"MF, EXP, RED"` |
+| `TAG_ZONES` | string | `""` | Comma-separated tags: `"TOP"`, `"GOOD"`, or any combination like `"TOP, GOOD"` |
 | `FILTER_ALERTS` | boolean | `false` | `true` = only alert on matching zones. `false` = alert on every zone |
 | `PRE_WARNING_MINUTES` | number | `0` | Lookahead window in minutes. When `> 0` and `FILTER_ALERTS` is `true`, sends an early "incoming" alert for matching zones about to start. Set to `15` for one rotation ahead, `30` for two, etc. `0` = disabled |
 
@@ -196,7 +196,7 @@ You'll get a Discord embed like this:
 
 > **Corrupted Zone Active!**
 >
-> **Chaos Sanctuary** — Act 4  |  `MF`
+> **Chaos Sanctuary** — Act 4  |  `TOP`
 >
 > **Ends:** *in 12 minutes*
 > **Next Zone:** Arreat Plateau, Crystalline Passage, and Frozen River (Act 5)
