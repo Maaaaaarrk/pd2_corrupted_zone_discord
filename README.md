@@ -102,24 +102,53 @@ This alerts on Chaos Sanctuary, Cow Level, **or** any zone tagged EXP.
 
 ### Pre-Warning for Upcoming Zones
 
-Want a heads-up *before* your favorite zone goes live? Set `PRE_WARNING_MINUTES` to get an early alert when a matching zone is about to start:
+Want a heads-up *before* your favorite zone goes live? This requires changes in **two places**: `config.json` and the GitHub Actions workflow cron schedule.
+
+#### Step 1: Set `PRE_WARNING_MINUTES` in `config.json`
+
+Set the lookahead window to the number of minutes before a zone rotation you want to be notified:
 
 ```json
 {
   "FAVORITE_ZONES": "Chaos Sanctuary, Cow Level",
   "TAG_ZONES": "EXP",
   "FILTER_ALERTS": true,
-  "PRE_WARNING_MINUTES": 15
+  "PRE_WARNING_MINUTES": 5
 }
 ```
 
-This sends an orange "Corrupted Zone Incoming!" alert whenever a zone matching your favorites or tags is starting within the next 15 minutes. The pre-warning shows the zone name, act, tags, and a countdown to when it starts.
+This tells the bot to send an orange "Corrupted Zone Incoming!" alert whenever a zone matching your favorites or tags is starting within the next 5 minutes.
+
+#### Step 2: Adjust the cron schedule in the workflow
+
+The default cron schedule runs every 15 minutes at `:00`, `:15`, `:30`, `:45` -- exactly when each zone rotation starts. For pre-warnings to fire, the workflow **must also run before** the rotation so the bot can detect the upcoming zone.
+
+Edit `.github/workflows/pd2-cz-alert.yml` and add run times that match your `PRE_WARNING_MINUTES` value. For example, for a **5-minute** pre-warning, add runs at 5 minutes before each rotation (`:10`, `:25`, `:40`, `:55`):
+
+```yaml
+on:
+  schedule:
+    # Zone rotations happen at :00, :15, :30, :45
+    # Pre-warnings need an extra run N minutes before each rotation
+    - cron: '0,10,15,25,30,40,45,55 * * * *'  # every 15 min + 5 min before
+```
+
+For a **10-minute** pre-warning:
+
+```yaml
+on:
+  schedule:
+    - cron: '0,5,15,20,30,35,45,50 * * * *'   # every 15 min + 10 min before
+```
+
+> **Important:** If `PRE_WARNING_MINUTES` is set but the cron only runs at `:00/:15/:30/:45`, the pre-warning check will never find an upcoming zone within the window because the bot only runs at the exact moment zones rotate. The cron schedule and the config value must be aligned.
 
 **How it works:**
 - Pre-warnings are only sent when `FILTER_ALERTS` is `true` (otherwise you already get notified for every zone).
-- The value is the lookahead window in minutes. Set it to `15` to get warned one zone rotation ahead, `30` for two rotations, etc.
+- The value is the lookahead window in minutes. Common values: `5` (5 min heads-up), `10`, or `15` (one full rotation ahead).
 - Set to `0` (the default) to disable pre-warnings.
 - Pre-warnings are sent *in addition to* the normal "Corrupted Zone Active!" alert when the zone actually starts.
+- The built-in debounce step ensures duplicate alerts are not sent if the workflow runs multiple times in the same 15-minute window.
 
 ### Alert on Every Zone (Default)
 
