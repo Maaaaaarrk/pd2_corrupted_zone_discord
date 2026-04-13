@@ -78,6 +78,7 @@ def find_next_alert(zone_info: dict, config: dict) -> dict | None:
     zone_act = zone_info["zone_act"]
     exp_zones = zone_info["exp_zones"]
     mf_zones = zone_info["mf_zones"]
+    red_zones = zone_info.get("red_zones", set())
     now_ms = zone_info["now_ms"]
     current_ts = zone_info["current_ts"]
 
@@ -87,6 +88,8 @@ def find_next_alert(zone_info: dict, config: dict) -> dict | None:
             tags.append("EXP")
         if idx in mf_zones:
             tags.append("MF")
+        if idx in red_zones:
+            tags.append("RED")
         return tags
 
     # Scan up to 24 hours ahead (96 slots)
@@ -125,6 +128,7 @@ def find_pre_warning_zones(zone_info: dict, config: dict) -> list:
     zone_act = zone_info["zone_act"]
     exp_zones = zone_info["exp_zones"]
     mf_zones = zone_info["mf_zones"]
+    red_zones = zone_info.get("red_zones", set())
     now_ms = zone_info["now_ms"]
     current_ts = zone_info["current_ts"]
 
@@ -134,6 +138,8 @@ def find_pre_warning_zones(zone_info: dict, config: dict) -> list:
             tags.append("EXP")
         if idx in mf_zones:
             tags.append("MF")
+        if idx in red_zones:
+            tags.append("RED")
         return tags
 
     # How many slots ahead to check (each slot is 15 min)

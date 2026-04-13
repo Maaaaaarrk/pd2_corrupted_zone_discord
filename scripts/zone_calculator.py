@@ -45,7 +45,7 @@ CZ_DATA_URL = "https://maaaaaarrk.github.io/Hiim-PD2-Resources/cz-data.js"
 def fetch_zone_data() -> dict:
     """Fetch and parse cz-data.js from the website.
 
-    Returns a dict with keys: zones, zoneAct, expZones, mfZones
+    Returns a dict with keys: zones, zoneAct, expZones, mfZones, redZones
     """
     req = Request(CZ_DATA_URL, headers={"User-Agent": "PD2-CZ-Discord-Bot/1.0"})
     with urlopen(req, timeout=15) as resp:
@@ -120,7 +120,7 @@ def get_current_corrupted_zone() -> dict:
         {
             "zone":          str   — current zone name,
             "act":           int   — act number (1-5),
-            "tags":          list  — e.g. ["EXP"], ["MF"], ["EXP","MF"], or [],
+            "tags":          list  — e.g. ["EXP"], ["MF"], ["RED"], or [],
             "minutes_left":  float — minutes remaining in current zone,
             "next_zone":     str   — name of the next zone,
             "next_act":      int   — act of the next zone,
@@ -131,6 +131,7 @@ def get_current_corrupted_zone() -> dict:
             "zone_act":      list  — full act list,
             "exp_zones":     set   — indices tagged EXP,
             "mf_zones":      set   — indices tagged MF,
+            "red_zones":     set   — indices tagged RED,
             "now_ms":        int   — current timestamp in ms,
         }
     """
@@ -139,6 +140,7 @@ def get_current_corrupted_zone() -> dict:
     zone_act = data["zoneAct"]
     exp_zones = set(data.get("expZones", []))
     mf_zones = set(data.get("mfZones", []))
+    red_zones = set(data.get("redZones", []))
 
     now_ms = int(time.time() * 1000)
 
@@ -155,6 +157,8 @@ def get_current_corrupted_zone() -> dict:
             tags.append("EXP")
         if idx in mf_zones:
             tags.append("MF")
+        if idx in red_zones:
+            tags.append("RED")
         return tags
 
     # Scan ahead to find when this zone returns (up to 24 hours = 96 slots)
@@ -189,6 +193,7 @@ def get_current_corrupted_zone() -> dict:
         "zone_act": zone_act,
         "exp_zones": exp_zones,
         "mf_zones": mf_zones,
+        "red_zones": red_zones,
         "now_ms": now_ms,
         "current_ts": current["ts"],
     }
