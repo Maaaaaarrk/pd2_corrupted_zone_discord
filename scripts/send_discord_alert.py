@@ -8,7 +8,9 @@ if it matches (or if no filters are configured, alerts on every zone).
 
 import json
 import os
+import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,9 +24,11 @@ from zone_calculator import get_current_corrupted_zone, get_zone, CYCLE_MS
 
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+MESSAGE_IDS_PATH = Path(__file__).resolve().parent.parent / "message_ids.json"
 CZ_PAGE_URL = "https://maaaaaarrk.github.io/Hiim-PD2-Resources/cz.html"
 EMBED_COLOR = 0x9B59B6  # Purple
 PRE_WARNING_COLOR = 0xF39C12  # Orange/amber for pre-warnings
+MAX_KEPT_MESSAGES = 3  # Number of recent webhook messages to keep
 
 
 def load_config() -> dict:
@@ -266,15 +270,98 @@ def build_embed(zone_info: dict, config: dict) -> dict:
     return embed
 
 
-def send_alert(webhook_url: str, embed: dict) -> None:
-    """POST the embed to the Discord webhook."""
+def parse_webhook_url(webhook_url: str) -> tuple[str, str]:
+    """Extract (webhook_id, webhook_token) from a Discord webhook URL."""
+    match = re.search(r"/webhooks/(\d+)/([A-Za-z0-9_-]+)", webhook_url)
+    if not match:
+        raise ValueError("Cannot parse webhook ID and token from DISCORD_WEBHOOK_URL")
+    return match.group(1), match.group(2)
+
+
+def load_message_ids() -> list[str]:
+    """Load the list of tracked message IDs from disk."""
+    if MESSAGE_IDS_PATH.is_file():
+        try:
+            with open(MESSAGE_IDS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except (json.JSONDecodeError, OSError):
+            return []
+    return []
+
+
+def save_message_ids(ids: list[str]) -> None:
+    """Persist the list of tracked message IDs to disk."""
+    with open(MESSAGE_IDS_PATH, "w", encoding="utf-8") as f:
+        json.dump(ids, f)
+
+
+def delete_old_messages(webhook_url: str, message_ids: list[str]) -> list[str]:
+    """Delete old webhook messages, keeping only the MAX_KEPT_MESSAGES newest.
+
+    Messages are stored newest-first in the list.  Anything beyond
+    MAX_KEPT_MESSAGES is deleted via the Discord webhook API.
+
+    Returns the trimmed list of IDs that were kept.
+    """
+    if len(message_ids) <= MAX_KEPT_MESSAGES:
+        return message_ids
+
+    webhook_id, webhook_token = parse_webhook_url(webhook_url)
+    keep = message_ids[:MAX_KEPT_MESSAGES]
+    to_delete = message_ids[MAX_KEPT_MESSAGES:]
+
+    for msg_id in to_delete:
+        url = f"https://discord.com/api/webhooks/{webhook_id}/{webhook_token}/messages/{msg_id}"
+        try:
+            resp = requests.delete(url, timeout=15)
+            if resp.status_code == 204:
+                print(f"Deleted old message {msg_id}")
+            elif resp.status_code == 404:
+                print(f"Message {msg_id} already deleted or not found — skipping.")
+            elif resp.status_code == 429:
+                # Rate limited — wait and retry once
+                retry_after = resp.json().get("retry_after", 1)
+                print(f"Rate limited, waiting {retry_after}s...")
+                time.sleep(retry_after)
+                resp2 = requests.delete(url, timeout=15)
+                if resp2.status_code in (204, 404):
+                    print(f"Deleted old message {msg_id} (after retry)")
+                else:
+                    print(f"WARNING: Failed to delete message {msg_id}: HTTP {resp2.status_code}")
+            else:
+                print(f"WARNING: Failed to delete message {msg_id}: HTTP {resp.status_code}")
+        except requests.RequestException as e:
+            print(f"WARNING: Error deleting message {msg_id}: {e}")
+
+    return keep
+
+
+def send_alert(webhook_url: str, embed: dict) -> str | None:
+    """POST the embed to the Discord webhook.
+
+    Uses ?wait=true so Discord returns the created message object.
+    Returns the message ID on success, or None on failure.
+    """
     payload = {
         "embeds": [embed],
     }
 
-    resp = requests.post(webhook_url, json=payload, timeout=15)
+    # Append ?wait=true so we get the message object back (includes the ID)
+    sep = "&" if "?" in webhook_url else "?"
+    post_url = f"{webhook_url}{sep}wait=true"
+
+    resp = requests.post(post_url, json=payload, timeout=15)
     resp.raise_for_status()
+
+    msg_id = None
+    try:
+        msg_id = resp.json().get("id")
+    except (ValueError, KeyError):
+        pass
+
     print(f"Alert sent successfully (HTTP {resp.status_code})")
+    return msg_id
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +418,9 @@ def main():
     # ---------------------------------------------------------------
     is_pre_window = filter_alerts and _is_pre_warning_window(zone_info, config)
 
+    # Load tracked message IDs (newest first)
+    message_ids = load_message_ids()
+
     if is_pre_window:
         # --- PRE-WARNING PATH (exclusive) ---
         print(f"In pre-warning window ({zone_info['minutes_left']} min left in slot) — only pre-warnings will be sent.")
@@ -342,9 +432,15 @@ def main():
             print(f"Pre-warning: {uz['zone']} (Act {uz['act']}) starts in {uz['minutes_until']} min")
             pre_embed = build_pre_warning_embed(uz)
             try:
-                send_alert(WEBHOOK_URL, pre_embed)
+                msg_id = send_alert(WEBHOOK_URL, pre_embed)
+                if msg_id:
+                    message_ids.insert(0, msg_id)
             except requests.RequestException as e:
                 print(f"WARNING: Failed to send pre-warning alert: {e}")
+
+        # Clean up old messages and save
+        message_ids = delete_old_messages(WEBHOOK_URL, message_ids)
+        save_message_ids(message_ids)
         return
 
     # --- REGULAR PATH (current zone alert) ---
@@ -356,10 +452,16 @@ def main():
     embed = build_embed(zone_info, config)
 
     try:
-        send_alert(WEBHOOK_URL, embed)
+        msg_id = send_alert(WEBHOOK_URL, embed)
+        if msg_id:
+            message_ids.insert(0, msg_id)
     except requests.RequestException as e:
         print(f"ERROR: Failed to send Discord alert: {e}")
         sys.exit(1)
+
+    # Clean up old messages and save
+    message_ids = delete_old_messages(WEBHOOK_URL, message_ids)
+    save_message_ids(message_ids)
 
 
 if __name__ == "__main__":
