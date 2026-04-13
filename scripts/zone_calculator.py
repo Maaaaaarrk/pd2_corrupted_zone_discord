@@ -46,7 +46,7 @@ LATENCY_TOLERANCE_MS = 120_000  # 2 minutes — snap to next slot if within this
 def fetch_zone_data() -> dict:
     """Fetch and parse cz-data.js from the website.
 
-    Returns a dict with keys: zones, zoneAct, expZones, mfZones, redZones
+    Returns a dict with keys: zones, zoneAct, topZones, goodZones, redZones
     """
     req = Request(CZ_DATA_URL, headers={"User-Agent": "PD2-CZ-Discord-Bot/1.0"})
     with urlopen(req, timeout=15) as resp:
@@ -121,7 +121,7 @@ def get_current_corrupted_zone() -> dict:
         {
             "zone":          str   — current zone name,
             "act":           int   — act number (1-5),
-            "tags":          list  — e.g. ["EXP"], ["MF"], ["RED"], or [],
+            "tags":          list  — e.g. ["TOP"], ["GOOD"], ["RED"], or [],
             "minutes_left":  float — minutes remaining in current zone,
             "next_zone":     str   — name of the next zone,
             "next_act":      int   — act of the next zone,
@@ -130,8 +130,8 @@ def get_current_corrupted_zone() -> dict:
             "zone_returns_minutes": float — minutes until this zone returns,
             "zones":         list  — full zone list (for lookahead searches),
             "zone_act":      list  — full act list,
-            "exp_zones":     set   — indices tagged EXP,
-            "mf_zones":      set   — indices tagged MF,
+            "top_zones":     set   — indices tagged TOP,
+            "good_zones":    set   — indices tagged GOOD,
             "red_zones":     set   — indices tagged RED,
             "now_ms":        int   — current timestamp in ms,
         }
@@ -139,8 +139,8 @@ def get_current_corrupted_zone() -> dict:
     data = fetch_zone_data()
     zones = data["zones"]
     zone_act = data["zoneAct"]
-    exp_zones = set(data.get("expZones", []))
-    mf_zones = set(data.get("mfZones", []))
+    top_zones = set(data.get("topZones", []))
+    good_zones = set(data.get("goodZones", []))
     red_zones = set(data.get("redZones", []))
 
     now_ms = int(time.time() * 1000)
@@ -162,10 +162,10 @@ def get_current_corrupted_zone() -> dict:
 
     def _tags(idx):
         tags = []
-        if idx in exp_zones:
-            tags.append("EXP")
-        if idx in mf_zones:
-            tags.append("MF")
+        if idx in top_zones:
+            tags.append("TOP")
+        if idx in good_zones:
+            tags.append("GOOD")
         if idx in red_zones:
             tags.append("RED")
         return tags
@@ -200,8 +200,8 @@ def get_current_corrupted_zone() -> dict:
         # Pass through for lookahead searches in the alert script
         "zones": zones,
         "zone_act": zone_act,
-        "exp_zones": exp_zones,
-        "mf_zones": mf_zones,
+        "top_zones": top_zones,
+        "good_zones": good_zones,
         "red_zones": red_zones,
         "now_ms": now_ms,
         "current_ts": current["ts"],

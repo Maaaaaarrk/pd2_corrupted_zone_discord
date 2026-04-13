@@ -80,18 +80,18 @@ def find_next_alert(zone_info: dict, config: dict) -> dict | None:
     """
     zones = zone_info["zones"]
     zone_act = zone_info["zone_act"]
-    exp_zones = zone_info["exp_zones"]
-    mf_zones = zone_info["mf_zones"]
+    top_zones = zone_info["top_zones"]
+    good_zones = zone_info["good_zones"]
     red_zones = zone_info.get("red_zones", set())
     now_ms = zone_info["now_ms"]
     current_ts = zone_info["current_ts"]
 
     def _tags(idx):
         tags = []
-        if idx in exp_zones:
-            tags.append("EXP")
-        if idx in mf_zones:
-            tags.append("MF")
+        if idx in top_zones:
+            tags.append("TOP")
+        if idx in good_zones:
+            tags.append("GOOD")
         if idx in red_zones:
             tags.append("RED")
         return tags
@@ -130,18 +130,18 @@ def find_pre_warning_zones(zone_info: dict, config: dict) -> list:
 
     zones = zone_info["zones"]
     zone_act = zone_info["zone_act"]
-    exp_zones = zone_info["exp_zones"]
-    mf_zones = zone_info["mf_zones"]
+    top_zones = zone_info["top_zones"]
+    good_zones = zone_info["good_zones"]
     red_zones = zone_info.get("red_zones", set())
     now_ms = zone_info["now_ms"]
     current_ts = zone_info["current_ts"]
 
     def _tags(idx):
         tags = []
-        if idx in exp_zones:
-            tags.append("EXP")
-        if idx in mf_zones:
-            tags.append("MF")
+        if idx in top_zones:
+            tags.append("TOP")
+        if idx in good_zones:
+            tags.append("GOOD")
         if idx in red_zones:
             tags.append("RED")
         return tags
