@@ -281,6 +281,26 @@ def send_alert(webhook_url: str, embed: dict) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+def _is_pre_warning_window(zone_info: dict, config: dict) -> bool:
+    """Determine whether we are in the pre-warning window for the NEXT zone.
+
+    The pre-warning window is the last ``PRE_WARNING_MINUTES`` minutes of the
+    current zone slot.  If we are inside that window the run should ONLY
+    attempt pre-warning messages — never fall back to a current-zone alert.
+
+    Returns False when pre-warnings are disabled or the remaining time in the
+    current slot exceeds the pre-warning threshold.
+    """
+    pre_warn_min = config.get("PRE_WARNING_MINUTES", 0)
+    if not pre_warn_min or pre_warn_min <= 0:
+        return False
+
+    # minutes_left tells us how much time remains in the current zone slot.
+    # If that value is within the pre-warning window, this run was triggered
+    # for the purpose of pre-warning (e.g. by an external cron service).
+    return zone_info["minutes_left"] <= pre_warn_min
+
+
 def main():
     if not WEBHOOK_URL:
         print("ERROR: DISCORD_WEBHOOK_URL secret is not set.")
@@ -303,27 +323,31 @@ def main():
     config = load_config()
     filter_alerts = config.get("FILTER_ALERTS", False)
 
-    pre_warnings_sent = False
-    # --- Pre-warnings: alert about upcoming favorite zones ---
-    pre_warn_min = config.get("PRE_WARNING_MINUTES", 0)
-    if pre_warn_min and pre_warn_min > 0 and filter_alerts:
+    # ---------------------------------------------------------------
+    # Split the flow: decide upfront whether this is a pre-warning
+    # run or a regular (current-zone) run.  The two paths are mutually
+    # exclusive so a pre-warning run can NEVER fall back to sending a
+    # current-zone alert.  Fixes GitHub issue #16.
+    # ---------------------------------------------------------------
+    is_pre_window = filter_alerts and _is_pre_warning_window(zone_info, config)
+
+    if is_pre_window:
+        # --- PRE-WARNING PATH (exclusive) ---
+        print(f"In pre-warning window ({zone_info['minutes_left']} min left in slot) — only pre-warnings will be sent.")
         upcoming = find_pre_warning_zones(zone_info, config)
+        if not upcoming:
+            print("No upcoming zones match filters — nothing to pre-warn about. Done.")
+            return
         for uz in upcoming:
             print(f"Pre-warning: {uz['zone']} (Act {uz['act']}) starts in {uz['minutes_until']} min")
             pre_embed = build_pre_warning_embed(uz)
             try:
                 send_alert(WEBHOOK_URL, pre_embed)
-                pre_warnings_sent = True
             except requests.RequestException as e:
                 print(f"WARNING: Failed to send pre-warning alert: {e}")
-
-    # --- Current zone alert ---
-    # If pre-warnings were already sent in this run, skip the current zone
-    # alert to avoid sending duplicate messages.  See GitHub issue #13.
-    if pre_warnings_sent:
-        print("Pre-warning(s) already sent -- skipping current zone alert to avoid double message.")
         return
 
+    # --- REGULAR PATH (current zone alert) ---
     if filter_alerts and not should_alert(zone_info, config):
         print("Zone does not match favorites/tags — skipping alert.")
         return
