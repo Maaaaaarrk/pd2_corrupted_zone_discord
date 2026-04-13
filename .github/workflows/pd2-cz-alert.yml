@@ -57,6 +57,13 @@ jobs:
         if: steps.debounce.outputs.skip != 'true'
         run: pip install requests
 
+      - name: Restore message ID cache
+        if: steps.debounce.outputs.skip != 'true'
+        uses: actions/cache@v4
+        with:
+          path: message_ids.json
+          key: discord-message-ids
+
       - name: Check Corrupted Zone and send alert
         if: steps.debounce.outputs.skip != 'true'
         env:
