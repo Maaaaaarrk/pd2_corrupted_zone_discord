@@ -46,7 +46,7 @@ LATENCY_TOLERANCE_MS = 120_000  # 2 minutes — snap to next slot if within this
 def fetch_zone_data() -> dict:
     """Fetch and parse cz-data.js from the website.
 
-    Returns a dict with keys: zones, zoneAct, topZones, goodZones
+    Returns a dict with keys: zones, zoneAct, topZones, goodZones, redZones
     """
     req = Request(CZ_DATA_URL, headers={"User-Agent": "PD2-CZ-Discord-Bot/1.0"})
     with urlopen(req, timeout=15) as resp:
@@ -121,7 +121,7 @@ def get_current_corrupted_zone() -> dict:
         {
             "zone":          str   — current zone name,
             "act":           int   — act number (1-5),
-            "tags":          list  — e.g. ["TOP"], ["GOOD"], or [],
+            "tags":          list  — e.g. ["TOP"], ["GOOD"], ["RED"], or [],
             "minutes_left":  float — minutes remaining in current zone,
             "next_zone":     str   — name of the next zone,
             "next_act":      int   — act of the next zone,
@@ -132,6 +132,7 @@ def get_current_corrupted_zone() -> dict:
             "zone_act":      list  — full act list,
             "top_zones":     set   — indices tagged TOP,
             "good_zones":    set   — indices tagged GOOD,
+            "red_zones":     set   — indices tagged RED,
             "now_ms":        int   — current timestamp in ms,
         }
     """
@@ -140,6 +141,7 @@ def get_current_corrupted_zone() -> dict:
     zone_act = data["zoneAct"]
     top_zones = set(data.get("topZones", []))
     good_zones = set(data.get("goodZones", []))
+    red_zones = set(data.get("redZones", []))
 
     now_ms = int(time.time() * 1000)
 
@@ -164,6 +166,8 @@ def get_current_corrupted_zone() -> dict:
             tags.append("TOP")
         if idx in good_zones:
             tags.append("GOOD")
+        if idx in red_zones:
+            tags.append("RED")
         return tags
 
     # Scan ahead to find when this zone returns (up to 24 hours = 96 slots)
@@ -198,6 +202,7 @@ def get_current_corrupted_zone() -> dict:
         "zone_act": zone_act,
         "top_zones": top_zones,
         "good_zones": good_zones,
+        "red_zones": red_zones,
         "now_ms": now_ms,
         "current_ts": current["ts"],
     }

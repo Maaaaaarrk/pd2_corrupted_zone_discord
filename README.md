@@ -74,14 +74,14 @@ Set `FAVORITE_ZONES` to a comma-separated list of zone names (partial matches wo
 }
 ```
 
-### Alert on Tagged Zones (TOP / GOOD)
+### Alert on Tagged Zones (TOP / GOOD / RED)
 
-Set `TAG_ZONES` to filter by the website's TOP and GOOD tags:
+Set `TAG_ZONES` to filter by the website's TOP, GOOD, and RED tags:
 
 ```json
 {
   "FAVORITE_ZONES": "",
-  "TAG_ZONES": "TOP, GOOD",
+  "TAG_ZONES": "TOP, GOOD, RED",
   "FILTER_ALERTS": true
 }
 ```
@@ -168,7 +168,7 @@ Set `FILTER_ALERTS` to `false` (or leave it out). You'll get an alert for every 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `FAVORITE_ZONES` | string | `""` | Comma-separated zone names (partial match, e.g. `"Chaos"` matches `"Chaos Sanctuary"`) |
-| `TAG_ZONES` | string | `""` | Comma-separated tags: `"TOP"`, `"GOOD"`, or any combination like `"TOP, GOOD"` |
+| `TAG_ZONES` | string | `""` | Comma-separated tags: `"TOP"`, `"GOOD"`, `"RED"`, or any combination like `"TOP, GOOD, RED"` |
 | `FILTER_ALERTS` | boolean | `false` | `true` = only alert on matching zones. `false` = alert on every zone |
 | `PRE_WARNING_MINUTES` | number | `0` | Lookahead window in minutes. When `> 0` and `FILTER_ALERTS` is `true`, sends an early "incoming" alert for matching zones about to start. Set to `15` for one rotation ahead, `30` for two, etc. `0` = disabled |
 
