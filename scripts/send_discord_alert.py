@@ -281,21 +281,30 @@ def parse_webhook_url(webhook_url: str) -> tuple[str, str]:
 def load_message_ids() -> dict:
     """Load tracked message IDs from disk.
 
-    Returns a dict with 'messages' (regular alert IDs, newest-first)
-    and 'pre_warnings' (pre-warning IDs to delete when the full alert lands).
-    Migrates the old flat-list format automatically.
+    Returns a dict with:
+      - 'messages': regular alert IDs (newest-first)
+      - 'pre_warnings': pre-warning IDs to delete when the full alert lands
+      - 'sent_slots': {"alert": <slot_ts>, "pre_warning": <slot_ts>}
+        tracks which zone slot (by start timestamp in ms) already had a
+        message sent, so duplicate runs in the same slot are skipped.
+
+    Migrates older formats automatically.
     """
-    empty = {"messages": [], "pre_warnings": []}
+    empty = {"messages": [], "pre_warnings": [], "sent_slots": {"alert": None, "pre_warning": None}}
     if MESSAGE_IDS_PATH.is_file():
         try:
             with open(MESSAGE_IDS_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             # Migrate old flat-list format
             if isinstance(data, list):
-                return {"messages": data, "pre_warnings": []}
+                return {"messages": data, "pre_warnings": [], "sent_slots": {"alert": None, "pre_warning": None}}
             if isinstance(data, dict):
                 data.setdefault("messages", [])
                 data.setdefault("pre_warnings", [])
+                data.setdefault("sent_slots", {"alert": None, "pre_warning": None})
+                # Ensure sent_slots has both keys
+                data["sent_slots"].setdefault("alert", None)
+                data["sent_slots"].setdefault("pre_warning", None)
                 return data
             return empty
         except (json.JSONDecodeError, OSError):
@@ -439,9 +448,19 @@ def main():
     # Load tracked message IDs (newest first)
     tracked = load_message_ids()
 
+    # The current zone slot timestamp (ms) is used as a debounce key.
+    # If a message was already sent for this slot, skip sending again.
+    current_slot_ts = zone_info["current_ts"]
+
     if is_pre_window:
         # --- PRE-WARNING PATH (exclusive) ---
         print(f"In pre-warning window ({zone_info['minutes_left']} min left in slot) — only pre-warnings will be sent.")
+
+        # Debounce: skip if a pre-warning was already sent for this slot
+        if tracked["sent_slots"].get("pre_warning") == current_slot_ts:
+            print("Pre-warning already sent for this zone slot — skipping.")
+            return
+
         upcoming = find_pre_warning_zones(zone_info, config)
         if not upcoming:
             print("No upcoming zones match filters — nothing to pre-warn about. Done.")
@@ -456,6 +475,9 @@ def main():
             except requests.RequestException as e:
                 print(f"WARNING: Failed to send pre-warning alert: {e}")
 
+        # Mark this slot as sent for pre-warnings
+        tracked["sent_slots"]["pre_warning"] = current_slot_ts
+
         # Clean up old messages and save
         tracked["messages"] = delete_old_messages(WEBHOOK_URL, tracked["messages"])
         save_message_ids(tracked)
@@ -464,6 +486,11 @@ def main():
     # --- REGULAR PATH (current zone alert) ---
     if filter_alerts and not should_alert(zone_info, config):
         print("Zone does not match favorites/tags — skipping alert.")
+        return
+
+    # Debounce: skip if an alert was already sent for this slot
+    if tracked["sent_slots"].get("alert") == current_slot_ts:
+        print("Alert already sent for this zone slot — skipping.")
         return
 
     # Delete any lingering pre-warning messages now that the full alert
@@ -483,6 +510,9 @@ def main():
     except requests.RequestException as e:
         print(f"ERROR: Failed to send Discord alert: {e}")
         sys.exit(1)
+
+    # Mark this slot as sent for alerts
+    tracked["sent_slots"]["alert"] = current_slot_ts
 
     # Clean up old messages and save
     tracked["messages"] = delete_old_messages(WEBHOOK_URL, tracked["messages"])
