@@ -194,7 +194,7 @@ def build_pre_warning_embed(upcoming_zone: dict) -> dict:
     ]
 
     embed = {
-        "title": f"🔔 Starts in {int(upcoming_zone['minutes_until'])} minutes",
+        "title": "🔔 Starting soon",
         "description": description,
         "color": PRE_WARNING_COLOR,
         "fields": fields,
