@@ -278,40 +278,43 @@ def parse_webhook_url(webhook_url: str) -> tuple[str, str]:
     return match.group(1), match.group(2)
 
 
-def load_message_ids() -> list[str]:
-    """Load the list of tracked message IDs from disk."""
+def load_message_ids() -> dict:
+    """Load tracked message IDs from disk.
+
+    Returns a dict with 'messages' (regular alert IDs, newest-first)
+    and 'pre_warnings' (pre-warning IDs to delete when the full alert lands).
+    Migrates the old flat-list format automatically.
+    """
+    empty = {"messages": [], "pre_warnings": []}
     if MESSAGE_IDS_PATH.is_file():
         try:
             with open(MESSAGE_IDS_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return data if isinstance(data, list) else []
+            # Migrate old flat-list format
+            if isinstance(data, list):
+                return {"messages": data, "pre_warnings": []}
+            if isinstance(data, dict):
+                data.setdefault("messages", [])
+                data.setdefault("pre_warnings", [])
+                return data
+            return empty
         except (json.JSONDecodeError, OSError):
-            return []
-    return []
+            return empty
+    return empty
 
 
-def save_message_ids(ids: list[str]) -> None:
-    """Persist the list of tracked message IDs to disk."""
+def save_message_ids(data: dict) -> None:
+    """Persist tracked message IDs to disk."""
     with open(MESSAGE_IDS_PATH, "w", encoding="utf-8") as f:
-        json.dump(ids, f)
+        json.dump(data, f)
 
 
-def delete_old_messages(webhook_url: str, message_ids: list[str]) -> list[str]:
-    """Delete old webhook messages, keeping only the MAX_KEPT_MESSAGES newest.
-
-    Messages are stored newest-first in the list.  Anything beyond
-    MAX_KEPT_MESSAGES is deleted via the Discord webhook API.
-
-    Returns the trimmed list of IDs that were kept.
-    """
-    if len(message_ids) <= MAX_KEPT_MESSAGES:
-        return message_ids
-
+def _delete_discord_messages(webhook_url: str, msg_ids: list[str]) -> None:
+    """Delete a list of Discord webhook messages by ID."""
+    if not msg_ids:
+        return
     webhook_id, webhook_token = parse_webhook_url(webhook_url)
-    keep = message_ids[:MAX_KEPT_MESSAGES]
-    to_delete = message_ids[MAX_KEPT_MESSAGES:]
-
-    for msg_id in to_delete:
+    for msg_id in msg_ids:
         url = f"https://discord.com/api/webhooks/{webhook_id}/{webhook_token}/messages/{msg_id}"
         try:
             resp = requests.delete(url, timeout=15)
@@ -334,6 +337,21 @@ def delete_old_messages(webhook_url: str, message_ids: list[str]) -> list[str]:
         except requests.RequestException as e:
             print(f"WARNING: Error deleting message {msg_id}: {e}")
 
+
+def delete_old_messages(webhook_url: str, message_ids: list[str]) -> list[str]:
+    """Delete old webhook messages, keeping only the MAX_KEPT_MESSAGES newest.
+
+    Messages are stored newest-first in the list.  Anything beyond
+    MAX_KEPT_MESSAGES is deleted via the Discord webhook API.
+
+    Returns the trimmed list of IDs that were kept.
+    """
+    if len(message_ids) <= MAX_KEPT_MESSAGES:
+        return message_ids
+
+    keep = message_ids[:MAX_KEPT_MESSAGES]
+    to_delete = message_ids[MAX_KEPT_MESSAGES:]
+    _delete_discord_messages(webhook_url, to_delete)
     return keep
 
 
@@ -419,7 +437,7 @@ def main():
     is_pre_window = filter_alerts and _is_pre_warning_window(zone_info, config)
 
     # Load tracked message IDs (newest first)
-    message_ids = load_message_ids()
+    tracked = load_message_ids()
 
     if is_pre_window:
         # --- PRE-WARNING PATH (exclusive) ---
@@ -434,13 +452,13 @@ def main():
             try:
                 msg_id = send_alert(WEBHOOK_URL, pre_embed)
                 if msg_id:
-                    message_ids.insert(0, msg_id)
+                    tracked["pre_warnings"].append(msg_id)
             except requests.RequestException as e:
                 print(f"WARNING: Failed to send pre-warning alert: {e}")
 
         # Clean up old messages and save
-        message_ids = delete_old_messages(WEBHOOK_URL, message_ids)
-        save_message_ids(message_ids)
+        tracked["messages"] = delete_old_messages(WEBHOOK_URL, tracked["messages"])
+        save_message_ids(tracked)
         return
 
     # --- REGULAR PATH (current zone alert) ---
@@ -448,20 +466,27 @@ def main():
         print("Zone does not match favorites/tags — skipping alert.")
         return
 
+    # Delete any lingering pre-warning messages now that the full alert
+    # is being posted (fixes #26 -- prune pre-messages sooner).
+    if tracked["pre_warnings"]:
+        print(f"Pruning {len(tracked['pre_warnings'])} pre-warning message(s)...")
+        _delete_discord_messages(WEBHOOK_URL, tracked["pre_warnings"])
+        tracked["pre_warnings"] = []
+
     # Build and send
     embed = build_embed(zone_info, config)
 
     try:
         msg_id = send_alert(WEBHOOK_URL, embed)
         if msg_id:
-            message_ids.insert(0, msg_id)
+            tracked["messages"].insert(0, msg_id)
     except requests.RequestException as e:
         print(f"ERROR: Failed to send Discord alert: {e}")
         sys.exit(1)
 
     # Clean up old messages and save
-    message_ids = delete_old_messages(WEBHOOK_URL, message_ids)
-    save_message_ids(message_ids)
+    tracked["messages"] = delete_old_messages(WEBHOOK_URL, tracked["messages"])
+    save_message_ids(tracked)
 
 
 if __name__ == "__main__":
